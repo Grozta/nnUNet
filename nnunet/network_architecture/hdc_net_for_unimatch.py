@@ -3,6 +3,7 @@ import torch.nn as nn
 from torch.cuda.amp import autocast
 from torch.nn import functional as F
 from torch.nn.modules.batchnorm import BatchNorm3d
+from nnunet.network_architecture.neural_network import SegmentationNetwork
 
 class Conv_1x1x1(nn.Module):
     def __init__(self, in_dim, out_dim, activation):
@@ -262,7 +263,7 @@ class Decoder(nn.Module):
         return x
         
 
-class HDC_Net(nn.Module):
+class HDC_Net(SegmentationNetwork):
     """
     一中轻量级的网络，是用了HDC模块简化Conv3D的计算量和参数，同时提出了一个具有固定中间通道数的u-net类型的网络
     """
