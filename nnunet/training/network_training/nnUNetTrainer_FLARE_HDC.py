@@ -17,7 +17,7 @@ class nnUNetTrainer_FLARE_HDC(nnUNetTrainer):
     def process_plans(self, plans):
         super().process_plans(plans)
         self.batch_size = 4
-        self.patch_size = [48,128,128]
+        self.patch_size = [64,160,160]
 
     def initialize_network(self):
         
@@ -29,10 +29,10 @@ class nnUNetTrainer_FLARE_HDC(nnUNetTrainer):
             conv_op = nn.Conv2d
 
         self.max_num_epochs = 500
-        self.num_batches_per_epoch = 320    
+        self.num_batches_per_epoch = 120    
         self.use_progress_bar = True
 
-        self.network = HDC_Net(in_chns=1, class_num=14,feature_chns=[128,256,256,512])
+        self.network = HDC_Net(in_chns=1, class_num=14,feature_chns=[64,64,128,128])
         self.network.cuda()
         self.network.conv_op = conv_op
         self.network.num_classes = self.num_classes
