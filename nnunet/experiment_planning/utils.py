@@ -96,6 +96,34 @@ def create_lists_from_splitted_dataset(base_folder_splitted):
         lists.append(cur_pat)
     return lists, {int(i): d['modality'][str(i)] for i in d['modality'].keys()}
 
+def create_lists_from_splitted_dataset_for_semi_supervised(base_folder_splitted):
+    train_lists = []
+    unlabeled_lists = []
+    json_file = join(base_folder_splitted, "dataset.json")
+    with open(json_file) as jsn:
+        d = json.load(jsn)
+        training_files = d['training']
+        unlabeled_files = d['unlabeled']
+    num_modalities = len(d['modality'].keys())
+    for tr in training_files:
+        cur_pat = []
+        for mod in range(num_modalities):
+            cur_pat.append(join(base_folder_splitted, "imagesTr", tr['image'].split("/")[-1][:-7] +
+                                "_%04.0d.nii.gz" % mod))
+        cur_pat.append(join(base_folder_splitted, "labelsTr", tr['label'].split("/")[-1]))
+        train_lists.append(cur_pat)
+        
+    for tr in unlabeled_files:
+        cur_pat = []
+        for mod in range(num_modalities):
+            postfix = "_%04.0d.nii.gz" % mod
+            cur_pat.append(join(base_folder_splitted, "unlabeled", tr['image'].split("/")[-1][:-7] +
+                                "_%04.0d.nii.gz" % mod))
+        cur_pat.append(tr['label'])
+        unlabeled_lists.append(cur_pat)
+    
+    return train_lists, unlabeled_lists, {int(i): d['modality'][str(i)] for i in d['modality'].keys()}
+
 
 def create_lists_from_splitted_dataset_folder(folder):
     """
@@ -119,6 +147,22 @@ def get_caseIDs_from_splitted_dataset_folder(folder):
     return files
 
 
+def crop_for_semi_supervised(task_string, override=False, num_threads=default_num_threads):
+    cropped_out_dir = join(nnUNet_cropped_data, task_string)
+    maybe_mkdir_p(cropped_out_dir)
+
+    if override and isdir(cropped_out_dir):
+        shutil.rmtree(cropped_out_dir)
+        maybe_mkdir_p(cropped_out_dir)
+
+    splitted_4d_output_dir_task = join(nnUNet_raw_data, task_string)
+    labeled_lists, unlabeled_list, _ = create_lists_from_splitted_dataset_for_semi_supervised(splitted_4d_output_dir_task)
+
+    imgcrop = ImageCropper(num_threads, cropped_out_dir)
+    imgcrop.run_cropping(labeled_lists, overwrite_existing=override)
+    imgcrop.run_cropping(unlabeled_list, overwrite_existing=override)
+    shutil.copy(join(nnUNet_raw_data, task_string, "dataset.json"), cropped_out_dir)
+    
 def crop(task_string, override=False, num_threads=default_num_threads):
     cropped_out_dir = join(nnUNet_cropped_data, task_string)
     maybe_mkdir_p(cropped_out_dir)

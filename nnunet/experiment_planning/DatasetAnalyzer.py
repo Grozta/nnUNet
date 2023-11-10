@@ -37,6 +37,8 @@ class DatasetAnalyzer(object):
         self.folder_with_cropped_data = folder_with_cropped_data
         self.sizes = self.spacings = None
         self.patient_identifiers = get_patient_identifiers_from_cropped_files(self.folder_with_cropped_data)
+        self.patient_identifiers_labeled=[]
+        self.patient_identifiers_unlabeled=[]
         assert isfile(join(self.folder_with_cropped_data, "dataset.json")), \
             "dataset.json needs to be in folder_with_cropped_data"
         self.props_per_case_file = join(self.folder_with_cropped_data, "props_per_case.pkl")
@@ -139,6 +141,11 @@ class DatasetAnalyzer(object):
             properties = self.load_properties_of_cropped(c)
             sizes.append(properties["size_after_cropping"])
             spacings.append(properties["original_spacing"])
+            
+            if  properties["seg_file"] is not None:
+                self.patient_identifiers_labeled.append(c)
+            else:
+                self.patient_identifiers_unlabeled.append(c)
 
         return sizes, spacings
 
@@ -251,6 +258,8 @@ class DatasetAnalyzer(object):
         dataset_properties['modalities'] = modalities  # {idx: modality name}
         dataset_properties['intensityproperties'] = intensityproperties
         dataset_properties['size_reductions'] = size_reductions  # {patient_id: size_reduction}
+        dataset_properties['patient_identifiers_labeled'] = self.patient_identifiers_labeled # identifiers_labeled
+        dataset_properties['patient_identifiers_unlabeled'] = self.patient_identifiers_unlabeled # identifiers_unlabeled
 
         save_pickle(dataset_properties, join(self.folder_with_cropped_data, "dataset_properties.pkl"))
         return dataset_properties

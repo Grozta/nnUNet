@@ -16,7 +16,7 @@
 import nnunet
 from batchgenerators.utilities.file_and_folder_operations import *
 from nnunet.experiment_planning.DatasetAnalyzer import DatasetAnalyzer
-from nnunet.experiment_planning.utils import crop
+from nnunet.experiment_planning.utils import crop, crop_for_semi_supervised
 from nnunet.paths import *
 import shutil
 from nnunet.utilities.task_name_id_conversion import convert_id_to_task_name
@@ -42,6 +42,8 @@ def main():
     parser.add_argument("-no_pp", action="store_true",
                         help="Set this flag if you dont want to run the preprocessing. If this is set then this script "
                              "will only run the experiment planning and create the plans file")
+    parser.add_argument("-semi_supervised", default=True, action="store_true",
+                        help="Set this flag if you dont want to run the preprocessing for semi_supervised dataset,")
     parser.add_argument("-tl", type=int, required=False, default=8,
                         help="Number of processes used for preprocessing the low resolution data for the 3D low "
                              "resolution U-Net. This can be larger than -tf. Don't overdo it or you will run out of "
@@ -103,9 +105,12 @@ def main():
 
         if args.verify_dataset_integrity:
             verify_dataset_integrity(join(nnUNet_raw_data, task_name))
-
-        crop(task_name, False, tf)
-
+            
+        if args.semi_supervised:
+            crop_for_semi_supervised(task_name, False, tf)
+        else:
+            crop(task_name, False, tf)
+            
         tasks.append(task_name)
 
     search_in = join(nnunet.__path__[0], "experiment_planning")

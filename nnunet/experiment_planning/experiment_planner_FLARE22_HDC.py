@@ -30,9 +30,9 @@ class ExperimentPlanner3D_FLARE22_HDC(ExperimentPlanner):
     """
     def __init__(self, folder_with_cropped_data, preprocessed_output_folder):
         super(ExperimentPlanner3D_FLARE22_HDC, self).__init__(folder_with_cropped_data, preprocessed_output_folder)
-        self.data_identifier = "nnUNetData_plans_FLARE22_HDC"
+        self.data_identifier = "nnUNetPlansFLARE22_HDC"
         self.plans_fname = join(self.preprocessed_output_folder,
-                                "nnUNetPlansFLARE22_HDC_plans_3D.pkl")
+                                "nnUNetPlansFLARE22_HDC_3D.pkl")
         self.unet_base_num_features = 32
 
     def get_target_spacing(self):

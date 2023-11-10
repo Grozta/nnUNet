@@ -314,7 +314,8 @@ class GenericPreprocessor(object):
         data, seg, properties = ImageCropper.crop_from_list_of_files(data_files, seg_file)
 
         data = data.transpose((0, *[i + 1 for i in self.transpose_forward]))
-        seg = seg.transpose((0, *[i + 1 for i in self.transpose_forward]))
+        if seg is not None:
+            seg = seg.transpose((0, *[i + 1 for i in self.transpose_forward]))
 
         data, seg, properties = self.resample_and_normalize(data, target_spacing, properties, seg,
                                                             force_separate_z=force_separate_z)
