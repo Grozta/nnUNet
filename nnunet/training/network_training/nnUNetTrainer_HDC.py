@@ -22,10 +22,10 @@ class nnUNetTrainer_HDC(nnUNetTrainer):
     def initialize_network(self):
     
         self.max_num_epochs = 500
-        self.num_batches_per_epoch = 120    
+        self.num_batches_per_epoch = 600   
         self.use_progress_bar = True
 
-        self.network = HDC_Net(in_chns=1, class_num=14,feature_chns=[64,64,128,128])
+        self.network = HDC_Net(in_chns=1, class_num=14,feature_chns=[64,96,128,128])
         
         if self.threeD:
             self.network.conv_op = nn.Conv3d

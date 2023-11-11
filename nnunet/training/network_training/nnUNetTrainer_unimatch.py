@@ -161,8 +161,8 @@ class nnUNetTrainer_unimatch(nnUNetTrainer):
 
     def initialize_network(self):
         
-        self.max_num_epochs = 10
-        self.num_batches_per_epoch = 40    
+        self.max_num_epochs = 100
+        self.num_batches_per_epoch = 600    
         self.use_progress_bar = True
         
         self.network = HDC_Net(in_chns=1, class_num=14,feature_chns=[64,96,128,128])
