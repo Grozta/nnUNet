@@ -29,3 +29,9 @@ def to_cuda(data, non_blocking=True, gpu_id=0):
     else:
         data = data.cuda(gpu_id, non_blocking=non_blocking)
     return data
+
+def maybe_to_cuda(data, non_blocking=True, gpu_id=0):
+    res = data
+    if torch.cuda.is_available():
+        res = to_cuda(data,non_blocking,gpu_id)
+    return res

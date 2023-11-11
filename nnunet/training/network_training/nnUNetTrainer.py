@@ -201,11 +201,11 @@ class nnUNetTrainer(NetworkTrainer):
         self.process_plans(self.plans)
 
         self.setup_DA_params()
-
-        if training:
-            self.folder_with_preprocessed_data = join(self.dataset_directory, self.plans['data_identifier'] +
+        
+        self.folder_with_preprocessed_data = join(self.dataset_directory, self.plans['data_identifier'] +
                                                       "_stage%d" % self.stage)
-
+        if training:
+            
             self.dl_tr, self.dl_val = self.get_basic_generators()
             if self.unpack_data:
                 self.print_to_log_file("unpacking dataset")

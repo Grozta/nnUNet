@@ -25,7 +25,7 @@ from batchgenerators.transforms.spatial_transforms import SpatialTransform, Mirr
 from batchgenerators.transforms.utility_transforms import RemoveLabelTransform, RenameTransform, NumpyToTensor
 
 from nnunet.training.data_augmentation.custom_transforms import Convert3DTo2DTransform, Convert2DTo3DTransform, \
-    MaskTransform, ConvertSegmentationToRegionsTransform
+    MaskTransform, ConvertSegmentationToRegionsTransform,SpatialTransform_for_unimatch, CloneAndCutmixTransform_for_unimatch
 from nnunet.training.data_augmentation.pyramid_augmentations import MoveSegAsOneHotToData, \
     ApplyRandomBinaryOperatorTransform, \
     RemoveRandomConnectedComponentFromOneHotEncodingTransform
@@ -234,6 +234,40 @@ def get_default_augmentation(dataloader_train, dataloader_val, patch_size, param
                                                 params.get("num_cached_per_thread"), seeds=seeds_val,
                                                 pin_memory=pin_memory)
     return batchgenerator_train, batchgenerator_val
+
+def get_semi_augmentation(dataloader_train, dataloader_val, dataloader_unlabeled, patch_size, params=default_3D_augmentation_params,
+                             border_val_seg=-1, pin_memory=True,
+                             seeds_train=None, seeds_val=None, regions=None):
+        
+    batchgenerator_train, batchgenerator_val = get_default_augmentation(dataloader_train, dataloader_val, patch_size, params,
+                            border_val_seg=border_val_seg, pin_memory=pin_memory,
+                            seeds_train=seeds_train, seeds_val=seeds_val, regions=regions)
+    
+    unlabeled_transforms = []
+    unlabeled_transforms.append(SpatialTransform_for_unimatch(
+        patch_size, patch_center_dist_from_border=None, do_elastic_deform=params.get("do_elastic"),
+        alpha=params.get("elastic_deform_alpha"), sigma=params.get("elastic_deform_sigma"),
+        do_rotation=params.get("do_rotation"), angle_x=params.get("rotation_x"), angle_y=params.get("rotation_y"),
+        angle_z=params.get("rotation_z"), do_scale=params.get("do_scaling"), scale=params.get("scale_range"),
+        border_mode_data=params.get("border_mode_data"), border_cval_data=0, order_data=3, border_mode_seg="constant",
+        border_cval_seg=border_val_seg,
+        order_seg=1, random_crop=params.get("random_crop"), p_el_per_sample=params.get("p_eldef"),
+        p_scale_per_sample=params.get("p_scale"), p_rot_per_sample=params.get("p_rot"),
+        independent_scale_for_each_axis=params.get("independent_scale_factor_for_each_axis")
+    )) 
+    
+    unlabeled_transforms.append(CloneAndCutmixTransform_for_unimatch())
+    unlabeled_transforms.append(NumpyToTensor(keys=['image_u_w', 'image_u_w_mix','image_u_s1','image_u_s2',
+                    "mixcut_box_1","mixcut_box_2"],cast_to='float'))
+    
+    unlabeled_transforms = Compose(unlabeled_transforms)
+
+    batchgenerator_unlabeled = MultiThreadedAugmenter(dataloader_unlabeled, unlabeled_transforms, max(params.get('num_threads') // 2, 1),
+                                                params.get("num_cached_per_thread"), seeds=seeds_val,
+                                                pin_memory=pin_memory)
+
+    return batchgenerator_train, batchgenerator_val, batchgenerator_unlabeled
+    
 
 
 if __name__ == "__main__":

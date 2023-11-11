@@ -15,6 +15,8 @@
 from collections import OrderedDict
 import numpy as np
 from multiprocessing import Pool
+import torch
+import random
 
 from batchgenerators.dataloading.data_loader import SlimDataLoaderBase
 
@@ -378,7 +380,104 @@ class DataLoader3D(SlimDataLoaderBase):
 
         return {'data': data, 'seg': seg, 'properties': case_properties, 'keys': selected_keys}
 
+class DataLoader3D_for_unimatch(DataLoader3D):
+    def __init__(self, data, patch_size, final_patch_size, batch_size,unlabeled=False, has_prev_stage=False,
+                 oversample_foreground_percent=0.0, memmap_mode="r", pad_mode="edge", pad_kwargs_data=None,
+                 pad_sides=None):
+        super(DataLoader3D_for_unimatch, self).__init__(data, patch_size, final_patch_size, batch_size, has_prev_stage=has_prev_stage,
+                 oversample_foreground_percent=oversample_foreground_percent, memmap_mode=memmap_mode, pad_mode=pad_mode, pad_kwargs_data=pad_kwargs_data,
+                 pad_sides=pad_sides)
+        self.unlabeled = unlabeled
+    
+    @classmethod
+    def obtain_cutmix_box_3d(img_size, p=0.5, size_min=0.02, size_max=0.4, ratio_1=0.3, ratio_2=1/0.3):
+        mask = torch.zeros(img_size)
+        if random.random() > p:
+            return mask
 
+        size = np.random.uniform(size_min, size_max) * img_size[0] * img_size[1] * img_size[2]
+        while True:
+            ratio = np.random.uniform(ratio_1, ratio_2)
+            cutmix_d = int(np.cbrt(size * ratio))
+            cutmix_w = int(np.cbrt (size / ratio))
+            cutmix_h = int(np.cbrt(size / ratio))
+            d = np.random.randint(0, img_size[0])
+            w = np.random.randint(0, img_size[1])
+            h = np.random.randint(0, img_size[2])
+
+            if w + cutmix_w <= img_size[0] and h + cutmix_h <= img_size[1] and d + cutmix_d <= img_size[2]:
+                break
+
+        mask[ d:d+cutmix_d,w:w + cutmix_w, h:h + cutmix_h] = 1
+        return mask
+
+        
+    def generate_train_batch(self):
+        selected_keys_1 = np.random.choice(self.list_of_keys, self.batch_size, False, None)
+        selected_keys_2 = np.random.choice(self.list_of_keys, self.batch_size, False, None)
+        # unlabeled_1 = np.zeros(self.data_shape, dtype=np.float32)
+        # unlabeled_2 = np.zeros(self.data_shape, dtype=np.float32)
+        image_identifier = []
+        for batch_idx, (identif_1,identif_2) in enumerate(zip(selected_keys_1,selected_keys_2)):
+            # cases are stored as npz, but we require unpack_dataset to be run. This will decompress them into npy
+            # which is much faster to access
+            if isfile(self._data[identif_1]['data_file'][:-4] + ".npy"):
+                case_all_data_1 = np.load(self._data[identif_1]['data_file'][:-4] + ".npy", self.memmap_mode)
+                case_all_data_2 = np.load(self._data[identif_2]['data_file'][:-4] + ".npy", self.memmap_mode)
+            else:
+                case_all_data_1 = np.load(self._data[identif_1]['data_file'])['data']
+                case_all_data_2 = np.load(self._data[identif_2]['data_file'])['data'] 
+                
+            image_identifier.append(identif_1)
+            image_identifier.append(identif_2)
+            
+            # case_all_data_list = []
+            
+            # for case_all_data in [case_all_data_1,case_all_data_2]:
+                
+            #     need_to_pad = self.need_to_pad.copy()
+            #     for d in range(3):
+            #         if need_to_pad[d] + case_all_data.shape[d + 1] < self.patch_size[d]:
+            #             need_to_pad[d] = self.patch_size[d] - case_all_data.shape[d + 1]
+
+            #     shape = case_all_data.shape[1:]
+            #     lb_x = - need_to_pad[0] // 2
+            #     ub_x = shape[0] + need_to_pad[0] // 2 + need_to_pad[0] % 2 - self.patch_size[0]
+            #     lb_y = - need_to_pad[1] // 2
+            #     ub_y = shape[1] + need_to_pad[1] // 2 + need_to_pad[1] % 2 - self.patch_size[1]
+            #     lb_z = - need_to_pad[2] // 2
+            #     ub_z = shape[2] + need_to_pad[2] // 2 + need_to_pad[2] % 2 - self.patch_size[2]
+
+            #     bbox_x_lb = np.random.randint(lb_x, ub_x + 1)
+            #     bbox_y_lb = np.random.randint(lb_y, ub_y + 1)
+            #     bbox_z_lb = np.random.randint(lb_z, ub_z + 1)
+
+            #     bbox_x_ub = bbox_x_lb + self.patch_size[0]
+            #     bbox_y_ub = bbox_y_lb + self.patch_size[1]
+            #     bbox_z_ub = bbox_z_lb + self.patch_size[2]
+
+            #     valid_bbox_x_lb = max(0, bbox_x_lb)
+            #     valid_bbox_x_ub = min(shape[0], bbox_x_ub)
+            #     valid_bbox_y_lb = max(0, bbox_y_lb)
+            #     valid_bbox_y_ub = min(shape[1], bbox_y_ub)
+            #     valid_bbox_z_lb = max(0, bbox_z_lb)
+            #     valid_bbox_z_ub = min(shape[2], bbox_z_ub)
+
+            #     case_all_data = np.copy(case_all_data[:, valid_bbox_x_lb:valid_bbox_x_ub,
+            #                             valid_bbox_y_lb:valid_bbox_y_ub,
+            #                             valid_bbox_z_lb:valid_bbox_z_ub])
+                
+            #     case_all_data_list.append(case_all_data)
+            
+     
+            # unlabeled_1[batch_idx] = case_all_data_list[0][:1]
+            # unlabeled_2[batch_idx] = case_all_data_list[1][:1]
+            unlabeled_1 = case_all_data_1[:1][np.newaxis, :]
+            unlabeled_2 = case_all_data_2[:1][np.newaxis, :]
+
+        return {'image_u_w': unlabeled_1, 'image_u_w_mix': unlabeled_2,'image_u_s1': None,'image_u_s2': None,
+                "mixcut_box_1": None,"mixcut_box_2":None,"image_identifier":image_identifier}
+        
 class DataLoader2D(SlimDataLoaderBase):
     def __init__(self, data, patch_size, final_patch_size, batch_size, oversample_foreground_percent=0.0,
                  memmap_mode="r", pseudo_3d_slices=1, pad_mode="edge",
