@@ -19,7 +19,7 @@ class nnUNetTrainer_HDC(nnUNetTrainer):
 
     def process_plans(self, plans):
         super().process_plans(plans)
-        self.batch_size = 3
+        self.batch_size = 4
         self.patch_size = [64,160,160]
 
     def initialize_network(self):
@@ -27,8 +27,9 @@ class nnUNetTrainer_HDC(nnUNetTrainer):
         self.max_num_epochs = 400
         self.num_batches_per_epoch = 210   
         self.use_progress_bar = True
+        self.feature_channels = [80,96,128,256]
 
-        self.network = HDC_Net(in_chns=1, class_num=14,feature_chns=[64,96,128,128])
+        self.network = HDC_Net(in_chns=1, class_num=14,feature_chns=self.feature_channels)
         
         if self.threeD:
             self.network.conv_op = nn.Conv3d

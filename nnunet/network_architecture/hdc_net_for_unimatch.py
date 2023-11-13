@@ -79,6 +79,8 @@ class HDC_module(nn.Module):
         self.conv_1x1x1_2 = Conv_1x1x1(out_dim, out_dim, activation)
         if self.in_dim > self.out_dim:
             self.conv_1x1x1_3 = Conv_1x1x1(in_dim, out_dim, activation)
+        if self.in_dim < self.out_dim:
+            self.conv_1x1x1_4 = Conv_1x1x1(in_dim, out_dim, activation)
         self.conv_1x3x3 = Conv_1x3x3(out_dim, out_dim, activation)
 
     def forward(self, x):
@@ -94,6 +96,8 @@ class HDC_module(nn.Module):
         x_1 = self.conv_1x1x1_2(x_1)
         if self.in_dim > self.out_dim:
             x = self.conv_1x1x1_3(x)
+        if self.in_dim < self.out_dim:
+            x = self.conv_1x1x1_4(x)
         x_1 = self.conv_1x3x3(x + x_1)
         return x_1
 
@@ -123,10 +127,13 @@ class DUC(nn.Module):
         else:
             print("scale factor should be int or tuple")
             raise ValueError
-        # self.conv = nn.Conv3d(in_channels, class_num * scale_factor_x * scale_factor_y * scale_factor_z, kernel_size=3, padding=1)
+        
+        iter_channels = class_num * self.scale_factor_x * self.scale_factor_y * self.scale_factor_z
+        #self.conv = nn.Conv3d(in_channels, iter_channels, kernel_size=3, padding=1)
         self.activation = nn.ReLU(inplace=False)
-        self.conv = HDC_module(in_channels, class_num * self.scale_factor_x * self.scale_factor_y * self.scale_factor_z, self.activation)
-        self.bn = nn.BatchNorm3d(class_num * self.scale_factor_x * self.scale_factor_y * self.scale_factor_z)
+        #self.pre_conv = nn.Conv3d(in_channels, iter_channels, kernel_size=1, stride=1, padding=0)
+        self.conv = HDC_module(in_channels, iter_channels, self.activation)
+        self.bn = nn.BatchNorm3d(iter_channels)
         self.relu = nn.ReLU(inplace=True)
     
     def pixelshuffle3d(self,x: torch.Tensor):
@@ -236,8 +243,9 @@ class Decoder(nn.Module):
         self.conv_2 = HDC_module(self.ft_chns[2]+self.ft_chns[1], self.ft_chns[1], self.activation)
         self.up_3 = conv_trans_block_3d(self.ft_chns[1], self.ft_chns[1], self.activation)
         self.conv_3 = HDC_module(self.ft_chns[1]+self.ft_chns[0], self.ft_chns[0], self.activation)
-        #self.upsample = nn.Upsample(scale_factor=2, mode='trilinear', align_corners=False)
-        self.upsample = conv_trans_block_3d(self.ft_chns[0], self.ft_chns[0], self.activation)
+        self.upsample = nn.Upsample(scale_factor=2, mode='trilinear', align_corners=False)
+        #self.upsample = conv_trans_block_3d(self.ft_chns[0], self.ft_chns[0], self.activation)
+        #self.out = DUC(2,self.n_class,self.ft_chns[0])
         self.out = nn.Conv3d(self.ft_chns[0], self.n_class, kernel_size=1, stride=1, padding=0)
         
     @autocast()
