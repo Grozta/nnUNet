@@ -11,16 +11,19 @@ from nnunet.training.network_training.nnUNetTrainer import nnUNetTrainer
 from nnunet.utilities.nd_softmax import softmax_helper
 from sklearn.model_selection import KFold
 from collections import OrderedDict
+from nnunet.training.loss_functions.dice_loss import DC_and_CE_loss_with_dice_weight
 
 
 class nnUNetTrainer_HDC(nnUNetTrainer):
     def __init__(self, plans_file, fold, output_folder=None, dataset_directory=None, batch_dice=True, stage=None, unpack_data=True, deterministic=True, fp16=False):
         super().__init__(plans_file, fold, output_folder, dataset_directory, batch_dice, stage, unpack_data, deterministic, fp16)
+        self.dice_weight=[0.0224,0.0224,0.0427,0.0323,0.1306,0.0642,0.063,0.2279,0.2432,0.221,0.1861,0.0417,0.1407,0.0383]
+        self.loss = DC_and_CE_loss_with_dice_weight(dice_weight=self.dice_weight)
 
     def process_plans(self, plans):
         super().process_plans(plans)
         self.batch_size = 4
-        self.patch_size = [64,160,160]
+        self.patch_size = [64,160,160]  
 
     def initialize_network(self):
     

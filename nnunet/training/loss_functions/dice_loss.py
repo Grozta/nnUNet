@@ -357,6 +357,50 @@ class DC_and_CE_loss(nn.Module):
         else:
             raise NotImplementedError("nah son") # reserved for other stuff (later)
         return result
+    
+    
+class DC_and_CE_loss_with_dice_weight(nn.Module):
+    def __init__(self, dice_weight:list = None, weight_dice=1,weight_ce=1,aggregate = "sum",ignore_label=None,log_dice=False):
+        """
+        CAREFUL. Weights for CE and Dice do not need to sum to one. You can set whatever you want.
+        :param soft_dice_kwargs:
+        :param ce_kwargs:
+        :param aggregate:
+        :param square_dice:
+        :param weight_ce:
+        :param weight_dice:
+        """
+        super(DC_and_CE_loss_with_dice_weight, self).__init__()
+        self.dice_weight = dice_weight
+        self.weight_dice = weight_dice
+        self.weight_ce = weight_ce
+        self.aggregate = aggregate
+        self.ignore_label = ignore_label
+        self.log_dice = log_dice
+        
+        self.ce = nn.CrossEntropyLoss()
+        self.dc = DiceLoss()
+
+    def forward(self, net_output, target):
+        """
+        
+        target must be b, c, x, y(, z) with c=1
+        :param net_output:[b,14,d,w,h]
+        :param target:[b,1,d,w,h]
+        :return:
+        """
+        target = target.long().squeeze(1)
+        ce_loss = self.ce(net_output.float(), target)
+        dc_loss = self.dc(net_output.softmax(dim=1), target.unsqueeze(1), self.dice_weight)
+        
+        if self.log_dice:
+            dc_loss = -torch.log(-dc_loss)
+
+        if self.aggregate == "sum":
+            result = self.weight_ce * ce_loss + self.weight_dice * dc_loss
+        else:
+            raise NotImplementedError("nah son") # reserved for other stuff (later)
+        return result
 
 
 class DC_and_BCE_loss(nn.Module):
@@ -456,7 +500,7 @@ class DiceLoss(nn.Module):
         class_wise_dice = []
         loss = 0.0
         for i in range(0, self.n_classes):
-            dice = self._dice_loss(inputs[:, i], target[:, i], ignore)
-            class_wise_dice.append(1.0 - dice.item())
-            loss += dice * weight[i]
+            dice_loss= self._dice_loss(inputs[:, i], target[:, i], ignore)
+            class_wise_dice.append(1.0 - dice_loss.item())
+            loss += dice_loss * weight[i]
         return loss / self.n_classes
