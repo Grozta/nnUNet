@@ -142,8 +142,9 @@ def main():
         dataset_json = load_json(join(cropped_out_dir, 'dataset.json'))
         modalities = list(dataset_json["modality"].values())
         collect_intensityproperties = True if (("CT" in modalities) or ("ct" in modalities)) else False
+        collect_mask_organ_infomation = True if (("CT" in modalities) or ("ct" in modalities)) else False
         dataset_analyzer = DatasetAnalyzer(cropped_out_dir, overwrite=False, num_processes=tf)  # this class creates the fingerprint
-        _ = dataset_analyzer.analyze_dataset(collect_intensityproperties)  # this will write output files that will be used by the ExperimentPlanner
+        _ = dataset_analyzer.analyze_dataset(collect_intensityproperties,collect_mask_organ_infomation)  # this will write output files that will be used by the ExperimentPlanner
 
 
         maybe_mkdir_p(preprocessing_output_dir_this_task)

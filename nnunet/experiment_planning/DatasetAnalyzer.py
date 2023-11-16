@@ -184,7 +184,80 @@ class DatasetAnalyzer(object):
         percentile_99_5 = np.percentile(voxels, 99.5)
         percentile_00_5 = np.percentile(voxels, 00.5)
         return median, mean, sd, mn, mx, percentile_99_5, percentile_00_5
+    
+    def _get_voxels_in_foreground_and_mask(self, patient_identifier, modality_id):
+        all_data = np.load(join(self.folder_with_cropped_data, patient_identifier) + ".npz")['data']
+        modality = all_data[modality_id]
+        mask = all_data[-1] > 0
+        voxels = list(modality[mask][::10]) # no need to take every voxel  
+            
+        label_counts= [0.0]*len(self.get_classes())
+        if len(voxels) != 0:
+            mask = all_data[-1]
+            unique_labels = np.unique(mask)
+            for label in unique_labels:
+                    label_counts[int(label)] = np.sum(mask == label)
+        else:
+            voxels = list(modality[::10])
+        return voxels, label_counts
 
+    def collect_intensity_properties_with_mask(self, num_modalities):
+        if self.overwrite or not isfile(self.intensityproperties_file):
+            p = Pool(self.num_processes)
+
+            results = OrderedDict()
+            for mod_id in range(num_modalities):
+                results[mod_id] = OrderedDict()
+                v = p.starmap(self._get_voxels_in_foreground_and_mask, zip(self.patient_identifiers,
+                                                              [mod_id] * len(self.patient_identifiers)))
+
+                w = []
+                voxels_list=[]
+                label_counts_list = []
+                for voxels, label_counts in v:
+                    w += voxels
+                    voxels_list.append(voxels)
+                    if len(np.unique(np.array(label_counts)))>1:
+                        label_counts_list.append(label_counts)
+                label_counts_list= np.array(label_counts_list)
+                average_result = np.zeros(label_counts_list.shape[1])
+
+                for col in range(label_counts_list.shape[1]):
+                    non_zero_elements = label_counts_list[:, col][label_counts_list[:, col] != 0]
+                    if non_zero_elements.size > 0:
+                        average_result[col] = np.mean(non_zero_elements)
+
+                median, mean, sd, mn, mx, percentile_99_5, percentile_00_5 = self._compute_stats(w)
+
+                local_props = p.map(self._compute_stats, voxels_list)
+                props_per_case = OrderedDict()
+                for i, pat in enumerate(self.patient_identifiers):
+                    props_per_case[pat] = OrderedDict()
+                    props_per_case[pat]['median'] = local_props[i][0]
+                    props_per_case[pat]['mean'] = local_props[i][1]
+                    props_per_case[pat]['sd'] = local_props[i][2]
+                    props_per_case[pat]['mn'] = local_props[i][3]
+                    props_per_case[pat]['mx'] = local_props[i][4]
+                    props_per_case[pat]['percentile_99_5'] = local_props[i][5]
+                    props_per_case[pat]['percentile_00_5'] = local_props[i][6]
+
+                results[mod_id]['local_props'] = props_per_case
+                results[mod_id]['median'] = median
+                results[mod_id]['mean'] = mean
+                results[mod_id]['sd'] = sd
+                results[mod_id]['mn'] = mn
+                results[mod_id]['mx'] = mx
+                results[mod_id]['percentile_99_5'] = percentile_99_5
+                results[mod_id]['percentile_00_5'] = percentile_00_5
+                results[mod_id]['Statistics_of_the_number_of_voxels_in_each_organ'] = average_result.tolist()
+
+            p.close()
+            p.join()
+            save_pickle(results, self.intensityproperties_file)
+        else:
+            results = load_pickle(self.intensityproperties_file)
+        return results
+    
     def collect_intensity_properties(self, num_modalities):
         if self.overwrite or not isfile(self.intensityproperties_file):
             p = Pool(self.num_processes)
@@ -229,7 +302,7 @@ class DatasetAnalyzer(object):
             results = load_pickle(self.intensityproperties_file)
         return results
 
-    def analyze_dataset(self, collect_intensityproperties=True):
+    def analyze_dataset(self, collect_intensityproperties=True,collect_mask_organ_infomation=False):
         # get all spacings and sizes
         sizes, spacings = self.get_sizes_and_spacings_after_cropping()
 
@@ -244,7 +317,10 @@ class DatasetAnalyzer(object):
 
         # collect intensity information
         if collect_intensityproperties:
-            intensityproperties = self.collect_intensity_properties(len(modalities))
+            if collect_mask_organ_infomation:
+                intensityproperties = self.collect_intensity_properties_with_mask(len(modalities))
+            else:
+                intensityproperties = self.collect_intensity_properties(len(modalities))
         else:
             intensityproperties = None
 
