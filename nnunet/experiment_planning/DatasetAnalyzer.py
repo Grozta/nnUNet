@@ -226,6 +226,7 @@ class DatasetAnalyzer(object):
                     non_zero_elements = label_counts_list[:, col][label_counts_list[:, col] != 0]
                     if non_zero_elements.size > 0:
                         average_result[col] = np.mean(non_zero_elements)
+                        average_result = average_result/average_result.sum()
 
                 median, mean, sd, mn, mx, percentile_99_5, percentile_00_5 = self._compute_stats(w)
 
