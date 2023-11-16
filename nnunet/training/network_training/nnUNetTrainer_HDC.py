@@ -17,7 +17,8 @@ from nnunet.training.loss_functions.dice_loss import DC_and_CE_loss_with_dice_we
 class nnUNetTrainer_HDC(nnUNetTrainer):
     def __init__(self, plans_file, fold, output_folder=None, dataset_directory=None, batch_dice=True, stage=None, unpack_data=True, deterministic=True, fp16=False):
         super().__init__(plans_file, fold, output_folder, dataset_directory, batch_dice, stage, unpack_data, deterministic, fp16)
-        self.dice_weight=[0.0224,0.0224,0.0427,0.0323,0.1306,0.0642,0.063,0.2279,0.2432,0.221,0.1861,0.0417,0.1407,0.0383]
+        #self.dice_weight=[0.0224,0.0224,0.0427,0.0323,0.1306,0.0642,0.063,0.2279,0.2432,0.2210,0.1861,0.0417,0.1407,0.0383]
+        self.dice_weight=[0.138,0.138,0.417,0.261,1.605,0.371,0.58,1.437,1.515,0.664,1.672,0.700,1.998,0.396]
         self.loss = DC_and_CE_loss_with_dice_weight(dice_weight=self.dice_weight)
 
     def process_plans(self, plans):
