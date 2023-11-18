@@ -16,6 +16,7 @@
 import torch
 from nnunet.training.loss_functions.TopK_loss import TopKLoss
 from nnunet.training.loss_functions.crossentropy import RobustCrossEntropyLoss
+from nnunet.training.loss_functions.focal_loss import FocalLoss
 from nnunet.utilities.nd_softmax import softmax_helper
 from nnunet.utilities.tensor_utilities import sum_tensor
 from torch import nn
@@ -324,7 +325,7 @@ class DC_and_CE_loss(nn.Module):
         self.ignore_label = ignore_label
 
         if not square_dice:
-            self.dc = SoftDiceLossWithWeight(apply_nonlin=softmax_helper, **soft_dice_kwargs)
+            self.dc = SoftDiceLoss(apply_nonlin=softmax_helper, **soft_dice_kwargs)
         else:
             self.dc = SoftDiceLossSquared(apply_nonlin=softmax_helper, **soft_dice_kwargs)
 
@@ -359,8 +360,9 @@ class DC_and_CE_loss(nn.Module):
         return result
     
     
-class DC_and_CE_loss_with_dice_weight(nn.Module):
-    def __init__(self, dice_weight:list = None, weight_dice=1,weight_ce=1,aggregate = "sum",ignore_label=None,log_dice=False):
+class DC_and_CE_loss_with_weight(nn.Module):
+    def __init__(self, soft_dice_kwargs, ce_kwargs, aggregate="sum", square_dice=False, weight_ce=1, weight_dice=1,
+                 log_dice=False, ignore_label=None):
         """
         CAREFUL. Weights for CE and Dice do not need to sum to one. You can set whatever you want.
         :param soft_dice_kwargs:
@@ -370,31 +372,46 @@ class DC_and_CE_loss_with_dice_weight(nn.Module):
         :param weight_ce:
         :param weight_dice:
         """
-        super(DC_and_CE_loss_with_dice_weight, self).__init__()
-        self.dice_weight = dice_weight
+        super(DC_and_CE_loss_with_weight, self).__init__()
+        if ignore_label is not None:
+            assert not square_dice, 'not implemented'
+            ce_kwargs['reduction'] = 'none'
+        self.log_dice = log_dice
         self.weight_dice = weight_dice
         self.weight_ce = weight_ce
         self.aggregate = aggregate
+        self.ce = FocalLoss(apply_nonlin=softmax_helper,**ce_kwargs)
+
         self.ignore_label = ignore_label
-        self.log_dice = log_dice
-        
-        self.ce = nn.CrossEntropyLoss()
-        self.dc = DiceLoss()
+
+        if not square_dice:
+            self.dc = SoftDiceLossWithWeight(apply_nonlin=softmax_helper, **soft_dice_kwargs)
+        else:
+            self.dc = SoftDiceLossSquared(apply_nonlin=softmax_helper, **soft_dice_kwargs)
 
     def forward(self, net_output, target):
         """
-        
         target must be b, c, x, y(, z) with c=1
-        :param net_output:[b,14,d,w,h]
-        :param target:[b,1,d,w,h]
+        :param net_output:
+        :param target:
         :return:
         """
-        target = target.long().squeeze(1)
-        ce_loss = self.ce(net_output.float(), target)
-        dc_loss = self.dc(net_output.softmax(dim=1), target.unsqueeze(1), self.dice_weight)
-        
+        if self.ignore_label is not None:
+            assert target.shape[1] == 1, 'not implemented for one hot encoding'
+            mask = target != self.ignore_label
+            target[~mask] = 0
+            mask = mask.float()
+        else:
+            mask = None
+
+        dc_loss = self.dc(net_output, target, loss_mask=mask) if self.weight_dice != 0 else 0
         if self.log_dice:
             dc_loss = -torch.log(-dc_loss)
+
+        ce_loss = self.ce(net_output, target[:, 0].long()) if self.weight_ce != 0 else 0
+        if self.ignore_label is not None:
+            ce_loss *= mask[:, 0]
+            ce_loss = ce_loss.sum() / mask.sum()
 
         if self.aggregate == "sum":
             result = self.weight_ce * ce_loss + self.weight_dice * dc_loss
@@ -548,7 +565,7 @@ class SoftDiceLossWithWeight(nn.Module):
             else:
                 dc = dc[:, 1:]
                 
-        b_gpu = torch.tensor(self.dice_weight, dtype = dc.dtype, device='cuda')
+        b_gpu = torch.tensor(self.dice_weight, dtype = dc.dtype, device=dc.device)
         b_column_gpu = b_gpu.view(-1, 1)
         dc_sum = torch.sum(dc, dim=1)
         

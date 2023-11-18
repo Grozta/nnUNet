@@ -11,17 +11,16 @@ from nnunet.training.network_training.nnUNetTrainer import nnUNetTrainer
 from nnunet.utilities.nd_softmax import softmax_helper
 from sklearn.model_selection import KFold
 from collections import OrderedDict
-from nnunet.training.loss_functions.dice_loss import DC_and_CE_loss_with_dice_weight,DC_and_CE_loss
-
-
+from nnunet.training.loss_functions.dice_loss import DC_and_CE_loss_with_weight
 class nnUNetTrainer_HDC(nnUNetTrainer):
     def __init__(self, plans_file, fold, output_folder=None, dataset_directory=None, batch_dice=True, stage=None, unpack_data=True, deterministic=True, fp16=False):
         super().__init__(plans_file, fold, output_folder, dataset_directory, batch_dice, stage, unpack_data, deterministic, fp16)
         dataset_properties = load_pickle(join(self.dataset_directory, 'dataset_properties.pkl'))
-        #self.dice_weight=[0.0224,0.0224,0.0427,0.0323,0.1306,0.0642,0.063,0.2279,0.2432,0.2210,0.1861,0.0417,0.1407,0.0383]
         self.dice_weight=dataset_properties["intensityproperties"][0]['Statistics_of_the_number_of_voxels_in_each_organ']
-        #self.loss = DC_and_CE_loss_with_dice_weight(dice_weight=self.dice_weight)
-        self.loss = DC_and_CE_loss({'batch_dice': self.batch_dice, 'smooth': 1e-5, 'do_bg': False,'dice_weight':self.dice_weight}, {})
+        # v = np.array(self.dice_weight)        
+        # self.focal_alpha = (v.sum()/v).tolist()
+        self.focal_alpha = self.dice_weight
+        self.loss = DC_and_CE_loss_with_weight({'batch_dice': self.batch_dice, 'smooth': 1e-5, 'do_bg': False,'dice_weight':self.dice_weight}, {'alpha':self.focal_alpha})
 
     def process_plans(self, plans):
         super().process_plans(plans)
