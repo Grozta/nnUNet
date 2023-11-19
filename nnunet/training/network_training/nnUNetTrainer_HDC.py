@@ -20,6 +20,7 @@ class nnUNetTrainer_HDC(nnUNetTrainer):
         super().__init__(plans_file, fold, output_folder, dataset_directory, batch_dice, stage, unpack_data, deterministic, fp16)
         dataset_properties = load_pickle(join(self.dataset_directory, 'dataset_properties.pkl'))
         self.dice_weight=dataset_properties["intensityproperties"][0]['Statistics_of_the_number_of_voxels_in_each_organ']
+        v = np.array(self.dice_weight)
         organ_vol = np.array(self.dice_weight)[1:]
         self.dataset_need_focal_class_weight = (organ_vol.sum()/organ_vol).tolist()      
         self.focal_alpha = (v.sum()/v).tolist()
