@@ -3,6 +3,8 @@ import os
 import numpy as np
 import torch
 from torch import nn
+from time import time
+from datetime import datetime
 
 from typing import Tuple
 from batchgenerators.utilities.file_and_folder_operations import *
@@ -12,14 +14,17 @@ from nnunet.utilities.nd_softmax import softmax_helper
 from sklearn.model_selection import KFold
 from collections import OrderedDict
 from nnunet.training.loss_functions.dice_loss import DC_and_CE_loss_with_weight
+from nnunet.training.dataloading.dataset_loading import DataLoader3D_with_selected_wieght
 class nnUNetTrainer_HDC(nnUNetTrainer):
     def __init__(self, plans_file, fold, output_folder=None, dataset_directory=None, batch_dice=True, stage=None, unpack_data=True, deterministic=True, fp16=False):
         super().__init__(plans_file, fold, output_folder, dataset_directory, batch_dice, stage, unpack_data, deterministic, fp16)
         dataset_properties = load_pickle(join(self.dataset_directory, 'dataset_properties.pkl'))
         self.dice_weight=dataset_properties["intensityproperties"][0]['Statistics_of_the_number_of_voxels_in_each_organ']
-        # v = np.array(self.dice_weight)        
-        # self.focal_alpha = (v.sum()/v).tolist()
-        self.focal_alpha = self.dice_weight
+        organ_vol = np.array(self.dice_weight)[1:]
+        self.dataset_need_focal_class_weight = (organ_vol.sum()/organ_vol).tolist()      
+        self.focal_alpha = (v.sum()/v).tolist()
+        #self.focal_alpha = self.dice_weight
+        self.oversample_foreground_percent = 0.33
         self.loss = DC_and_CE_loss_with_weight({'batch_dice': self.batch_dice, 'smooth': 1e-5, 'do_bg': False,'dice_weight':self.dice_weight}, {'alpha':self.focal_alpha})
 
     def process_plans(self, plans):
@@ -101,4 +106,23 @@ class nnUNetTrainer_HDC(nnUNetTrainer):
         self.dataset_unlabeled = OrderedDict()
         for i in self.patient_identifiers_unlabeled:
             self.dataset_unlabeled[i] = self.dataset[i]
-    
+            
+    def get_basic_generators(self):
+        self.load_dataset()
+        self.do_split()
+        timestamp = datetime.now()
+        if self.threeD:
+            dl_tr = DataLoader3D_with_selected_wieght(self.dataset_tr, self.basic_generator_patch_size, self.patch_size, self.batch_size,self.dataset_need_focal_class_weight,
+                                 False, oversample_foreground_percent=self.oversample_foreground_percent,
+                                 pad_mode="constant", pad_sides=self.pad_all_sides, memmap_mode='r')
+            dl_tr.dataset_debug_log = join(self.output_folder, "dataset_debug_log_%d_%d_%d_%02.0d_%02.0d_%02.0d.txt" %
+                                 (timestamp.year, timestamp.month, timestamp.day, timestamp.hour, timestamp.minute,
+                                  timestamp.second))
+            dl_val = DataLoader3D_with_selected_wieght(self.dataset_val, self.patch_size, self.patch_size, self.batch_size,self.dataset_need_focal_class_weight, 
+                                  False,  oversample_foreground_percent=self.oversample_foreground_percent,
+                                  pad_mode="constant", pad_sides=self.pad_all_sides, memmap_mode='r')
+            dl_val.dataset_debug_log = join(self.output_folder, "dataset_debug_log_%d_%d_%d_%02.0d_%02.0d_%02.0d.txt" %
+                                 (timestamp.year, timestamp.month, timestamp.day, timestamp.hour, timestamp.minute,
+                                  timestamp.second))
+
+        return dl_tr, dl_val
