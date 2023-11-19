@@ -27,6 +27,11 @@ class nnUNetTrainer_HDC(nnUNetTrainer):
         #self.focal_alpha = self.dice_weight
         self.oversample_foreground_percent = 0.33
         self.loss = DC_and_CE_loss_with_weight({'batch_dice': self.batch_dice, 'smooth': 1e-5, 'do_bg': False,'dice_weight':self.dice_weight}, {'alpha':self.focal_alpha})
+        
+        self.lr_scheduler_eps = 1e-4
+        self.lr_scheduler_patience = 20
+        self.initial_lr = 3e-3
+        self.lr_scheduler_factor=0.8
 
     def process_plans(self, plans):
         super().process_plans(plans)
@@ -35,8 +40,8 @@ class nnUNetTrainer_HDC(nnUNetTrainer):
 
     def initialize_network(self):
     
-        self.max_num_epochs = 400
-        self.num_batches_per_epoch = 210   
+        self.max_num_epochs = 600
+        self.num_batches_per_epoch = 320   
         self.use_progress_bar = True
         self.feature_channels = [80,96,128,256]
 
@@ -127,3 +132,12 @@ class nnUNetTrainer_HDC(nnUNetTrainer):
                                   timestamp.second))
 
         return dl_tr, dl_val
+
+    def initialize_optimizer_and_scheduler(self):
+        assert self.network is not None, "self.initialize_network must be called first"
+        self.optimizer = torch.optim.Adam(self.network.parameters(), self.initial_lr, weight_decay=self.weight_decay,
+                                          amsgrad=True)
+        self.lr_scheduler = lr_scheduler.ReduceLROnPlateau(self.optimizer, mode='min', factor=self.lr_scheduler_factor,
+                                                           patience=self.lr_scheduler_patience,
+                                                           verbose=True, threshold=self.lr_scheduler_eps,
+                                                           threshold_mode="abs")
