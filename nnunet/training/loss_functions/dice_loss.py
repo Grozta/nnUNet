@@ -325,7 +325,7 @@ class DC_and_CE_loss(nn.Module):
         self.ignore_label = ignore_label
 
         if not square_dice:
-            self.dc = SoftDiceLoss(apply_nonlin=softmax_helper, **soft_dice_kwargs)
+            self.dc = SoftDiceLossWithWeight_normal(apply_nonlin=softmax_helper, **soft_dice_kwargs)
         else:
             self.dc = SoftDiceLossSquared(apply_nonlin=softmax_helper, **soft_dice_kwargs)
 
@@ -357,7 +357,7 @@ class DC_and_CE_loss(nn.Module):
             result = self.weight_ce * ce_loss + self.weight_dice * dc_loss
         else:
             raise NotImplementedError("nah son") # reserved for other stuff (later)
-        return result
+        return result, ce_loss, dc_loss
     
     
 class DC_and_CE_loss_with_weight(nn.Module):
@@ -417,7 +417,7 @@ class DC_and_CE_loss_with_weight(nn.Module):
             result = self.weight_ce * ce_loss + self.weight_dice * dc_loss
         else:
             raise NotImplementedError("nah son") # reserved for other stuff (later)
-        return result
+        return result, ce_loss, dc_loss
 
 
 class DC_and_BCE_loss(nn.Module):
@@ -572,5 +572,55 @@ class SoftDiceLossWithWeight(nn.Module):
         dc_res = torch.mm(b_column_gpu, dc_sum.view(1, -1))
 
         dc_mean = dc_res.mean()
+
+        return -dc_mean
+    
+class SoftDiceLossWithWeight_normal(nn.Module):
+    def __init__(self, apply_nonlin=None, batch_dice=False, do_bg=True, smooth=1.,dice_weight=None):
+        """
+        """
+        super(SoftDiceLossWithWeight_normal, self).__init__()
+
+        self.do_bg = do_bg
+        self.batch_dice = batch_dice
+        self.apply_nonlin = apply_nonlin
+        self.smooth = smooth
+        if dice_weight is not None:
+            if self.do_bg:
+                dice_weight = np.array(dice_weight)
+            else:
+                dice_weight = np.array(dice_weight)[1:]
+            self.dice_weight = dice_weight
+
+        
+    def forward(self, x, y, loss_mask=None):
+        shp_x = x.shape
+
+        if self.batch_dice:
+            axes = [0] + list(range(2, len(shp_x)))
+        else:
+            axes = list(range(2, len(shp_x)))
+
+        if self.apply_nonlin is not None:
+            x = self.apply_nonlin(x)
+
+        tp, fp, fn, _ = get_tp_fp_fn_tn(x, y, axes, loss_mask, False)
+
+        nominator = 2 * tp + self.smooth
+        denominator = 2 * tp + fp + fn + self.smooth
+
+        dc = nominator / (denominator + 1e-8)
+
+        if not self.do_bg:
+            if self.batch_dice:
+                dc = dc[1:]
+            else:
+                dc = dc[:, 1:]
+
+        dice_weight = torch.tensor(self.dice_weight.tolist(), dtype = dc.dtype,device=dc.device).view(1, -1)
+        
+        dc = dc*dice_weight
+
+        dc_mean = dc.mean()
 
         return -dc_mean

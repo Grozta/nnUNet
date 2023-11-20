@@ -13,26 +13,28 @@ from nnunet.training.network_training.nnUNetTrainer import nnUNetTrainer
 from nnunet.utilities.nd_softmax import softmax_helper
 from sklearn.model_selection import KFold
 from collections import OrderedDict
-from nnunet.training.loss_functions.dice_loss import DC_and_CE_loss_with_weight
+from nnunet.training.loss_functions.dice_loss import DC_and_CE_loss_with_weight,DC_and_CE_loss
 from nnunet.training.dataloading.dataset_loading import DataLoader3D_with_selected_wieght
 from torch.optim import lr_scheduler
 class nnUNetTrainer_HDC(nnUNetTrainer):
     def __init__(self, plans_file, fold, output_folder=None, dataset_directory=None, batch_dice=True, stage=None, unpack_data=True, deterministic=True, fp16=False):
         super().__init__(plans_file, fold, output_folder, dataset_directory, batch_dice, stage, unpack_data, deterministic, fp16)
         dataset_properties = load_pickle(join(self.dataset_directory, 'dataset_properties.pkl'))
-        self.dice_weight=dataset_properties["intensityproperties"][0]['Statistics_of_the_number_of_voxels_in_each_organ']
+        #self.dice_weight=dataset_properties["intensityproperties"][0]['Statistics_of_the_number_of_voxels_in_each_organ']
+        self.dice_weight = np.array([1,1,0.971709592,0.987527885,0.851247212,0.976373961,0.955181505,0.868282296,0.860373149,0.946663963,0.844453458,0.943013588,0.811397282,0.973838978])
         organ_vol = np.array(self.dice_weight)[1:]
         self.dataset_need_focal_class_weight = (organ_vol.sum()/organ_vol).tolist()   
         v = np.array(self.dice_weight)   
         self.focal_alpha = (v.sum()/v).tolist()
         #self.focal_alpha = self.dice_weight
         self.oversample_foreground_percent = 0.33
-        self.loss = DC_and_CE_loss_with_weight({'batch_dice': self.batch_dice, 'smooth': 1e-5, 'do_bg': False,'dice_weight':self.dice_weight}, {'alpha':self.focal_alpha})
+        #self.loss = DC_and_CE_loss_with_weight({'batch_dice': self.batch_dice, 'smooth': 1e-5, 'do_bg': False,'dice_weight':self.dice_weight}, {'alpha':self.focal_alpha})
+        self.loss = DC_and_CE_loss({'batch_dice': self.batch_dice, 'smooth': 1e-5, 'do_bg': False,'dice_weight':self.dice_weight}, {})
         
         self.lr_scheduler_eps = 1e-4
-        self.lr_scheduler_patience = 20
-        self.initial_lr = 1e-3
-        self.lr_scheduler_factor=0.8
+        self.lr_scheduler_patience = 5
+        self.initial_lr = 3e-3
+        self.lr_scheduler_factor=0.2
 
     def process_plans(self, plans):
         super().process_plans(plans)

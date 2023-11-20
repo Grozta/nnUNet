@@ -35,7 +35,7 @@ from collections import OrderedDict
 import torch.backends.cudnn as cudnn
 from abc import abstractmethod
 from datetime import datetime
-from tqdm import trange
+from tqdm import trange, tqdm
 from nnunet.utilities.to_torch import maybe_to_torch, to_cuda
 
 
@@ -447,13 +447,13 @@ class NetworkTrainer(object):
                     for b in tbar:
                         tbar.set_description("Epoch {}/{}".format(self.epoch+1, self.max_num_epochs))
 
-                        l = self.run_iteration(self.tr_gen, True)
+                        l,ce_,dc_ = self.run_iteration(self.tr_gen, True)
 
-                        tbar.set_postfix(loss=l)
+                        tbar.set_postfix(ce=ce_,dc=dc_,loss=l)
                         train_losses_epoch.append(l)
             else:
                 for _ in range(self.num_batches_per_epoch):
-                    l = self.run_iteration(self.tr_gen, True)
+                    l,_,_ = self.run_iteration(self.tr_gen, True)
                     train_losses_epoch.append(l)
 
             self.all_tr_losses.append(np.mean(train_losses_epoch))
@@ -464,7 +464,7 @@ class NetworkTrainer(object):
                 self.network.eval()
                 val_losses = []
                 for b in range(self.num_val_batches_per_epoch):
-                    l = self.run_iteration(self.val_gen, False, True)
+                    l,_,_ = self.run_iteration(self.val_gen, False, True)
                     val_losses.append(l)
                 self.all_val_losses.append(np.mean(val_losses))
                 self.print_to_log_file("validation loss: %.4f" % self.all_val_losses[-1])
@@ -474,7 +474,7 @@ class NetworkTrainer(object):
                     # validation with train=True
                     val_losses = []
                     for b in range(self.num_val_batches_per_epoch):
-                        l = self.run_iteration(self.val_gen, False)
+                        l,_,_ = self.run_iteration(self.val_gen, False)
                         val_losses.append(l)
                     self.all_val_losses_tr_mode.append(np.mean(val_losses))
                     self.print_to_log_file("validation loss (train=True): %.4f" % self.all_val_losses_tr_mode[-1])
@@ -642,7 +642,7 @@ class NetworkTrainer(object):
             with autocast():
                 output = self.network(data)
                 del data
-                l = self.loss(output, target)
+                l,ce,dc = self.loss(output, target)
 
             if do_backprop:
                 self.amp_grad_scaler.scale(l).backward()
@@ -651,7 +651,7 @@ class NetworkTrainer(object):
         else:
             output = self.network(data)
             del data
-            l = self.loss(output, target)
+            l,ce,dc = self.loss(output, target)
 
             if do_backprop:
                 l.backward()
@@ -662,7 +662,7 @@ class NetworkTrainer(object):
 
         del target
 
-        return l.detach().cpu().numpy()
+        return l.detach().cpu().numpy(),ce.detach().cpu().numpy(),dc.detach().cpu().numpy()
 
     def run_online_evaluation(self, *args, **kwargs):
         """
@@ -702,10 +702,12 @@ class NetworkTrainer(object):
         best_loss = 0.
         losses = []
         log_lrs = []
-
-        for batch_num in range(1, num_iters + 1):
+        
+        train_loop = tqdm(range(1, num_iters + 1), total =num_iters,leave= True)
+        for batch_num in train_loop:
+            
             # +1 because this one here is not designed to have negative loss...
-            loss = self.run_iteration(self.tr_gen, do_backprop=True, run_online_evaluation=False).data.item() + 1
+            loss= (self.run_iteration(self.tr_gen, do_backprop=True, run_online_evaluation=False)[0]).item() + 1
 
             # Compute the smoothed loss
             avg_loss = beta * avg_loss + (1 - beta) * loss
@@ -722,7 +724,7 @@ class NetworkTrainer(object):
             # Store the values
             losses.append(smoothed_loss)
             log_lrs.append(math.log10(lr))
-
+            train_loop.set_description(f'running:loss[{smoothed_loss}]/lr[{lr}]')
             # Update the lr for the next step
             lr *= mult
             self.optimizer.param_groups[0]['lr'] = lr
