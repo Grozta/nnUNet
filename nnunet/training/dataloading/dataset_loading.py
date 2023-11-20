@@ -618,7 +618,7 @@ class DataLoader3D_with_selected_wieght(DataLoader3D):
                     random_choice = torch.multinomial(weights, 1)
                     selected_class = choices[random_choice.item()]
                     
-                    voxels_of_that_class = properties['class_locations'][selected_class]
+                    voxels_of_that_class = properties['class_locations'][int(selected_class.item())]
 
                 if voxels_of_that_class is not None:
                     selected_voxel = voxels_of_that_class[np.random.choice(len(voxels_of_that_class))]
