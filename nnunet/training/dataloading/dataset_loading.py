@@ -489,6 +489,8 @@ class DataLoader3D_with_selected_wieght(DataLoader3D):
                  pad_sides=pad_sides)
         class_wight_np = np.array(dataset_need_focal_class_weight)
         self.class_weight = class_wight_np/class_wight_np.sum()
+        self.class_weight_mask= np.array([1,1,1,10,1,1,1,1,1,1,1,10,1])
+        self.class_weight = self.class_weight_mask * self.class_weight
         self.dataset_debug_log = None  
         # self.dataset_debug_file = join(network_training_output_dir,'dataset_debug.json')
         # if  isfile(self.dataset_debug_file):
@@ -607,18 +609,15 @@ class DataLoader3D_with_selected_wieght(DataLoader3D):
                     for class_index in foreground_classes:
                         index_and_weight[class_index] = self.class_weight[class_index-1]
                         
-                    sorted_items_desc = sorted(index_and_weight.items(), key=lambda x: x[1], reverse=True)
+                    index_and_weight = dict(sorted(index_and_weight.items()))
+                    choices = torch.tensor(list(index_and_weight.keys()))
+                    weiht_sum = sum(list(index_and_weight.values()))
+                    index_and_weight = {key: value / weiht_sum for key, value in index_and_weight.items()}
+                    weights = torch.tensor(list(index_and_weight.values()))
                     
-                    random_number = random.random()
-                    last_wieght=1.0
-                    selected_class = int(sorted_items_desc[0][0]) # default value is largest peoprety and it is also the first value
-                    for index, weight in sorted_items_desc:
-                        if weight < random_number <=last_wieght:
-                            selected_class = int(index)
-                            break
-                        last_wieght -= weight
-                    # debug_do_oversample_dict[j] = selected_class
-                    self.write_log_line(f'selected:{selected_class}')
+                    random_choice = torch.multinomial(weights, 1)
+                    selected_class = choices[random_choice.item()]
+                    
                     voxels_of_that_class = properties['class_locations'][selected_class]
 
                 if voxels_of_that_class is not None:

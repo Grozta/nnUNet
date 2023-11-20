@@ -15,14 +15,15 @@ from sklearn.model_selection import KFold
 from collections import OrderedDict
 from nnunet.training.loss_functions.dice_loss import DC_and_CE_loss_with_weight
 from nnunet.training.dataloading.dataset_loading import DataLoader3D_with_selected_wieght
+from torch.optim import lr_scheduler
 class nnUNetTrainer_HDC(nnUNetTrainer):
     def __init__(self, plans_file, fold, output_folder=None, dataset_directory=None, batch_dice=True, stage=None, unpack_data=True, deterministic=True, fp16=False):
         super().__init__(plans_file, fold, output_folder, dataset_directory, batch_dice, stage, unpack_data, deterministic, fp16)
         dataset_properties = load_pickle(join(self.dataset_directory, 'dataset_properties.pkl'))
         self.dice_weight=dataset_properties["intensityproperties"][0]['Statistics_of_the_number_of_voxels_in_each_organ']
-        v = np.array(self.dice_weight)
         organ_vol = np.array(self.dice_weight)[1:]
-        self.dataset_need_focal_class_weight = (organ_vol.sum()/organ_vol).tolist()      
+        self.dataset_need_focal_class_weight = (organ_vol.sum()/organ_vol).tolist()   
+        v = np.array(self.dice_weight)   
         self.focal_alpha = (v.sum()/v).tolist()
         #self.focal_alpha = self.dice_weight
         self.oversample_foreground_percent = 0.33
@@ -30,7 +31,7 @@ class nnUNetTrainer_HDC(nnUNetTrainer):
         
         self.lr_scheduler_eps = 1e-4
         self.lr_scheduler_patience = 20
-        self.initial_lr = 3e-3
+        self.initial_lr = 1e-3
         self.lr_scheduler_factor=0.8
 
     def process_plans(self, plans):
