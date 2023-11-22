@@ -20,21 +20,15 @@ class nnUNetTrainer_HDC(nnUNetTrainer):
     def __init__(self, plans_file, fold, output_folder=None, dataset_directory=None, batch_dice=True, stage=None, unpack_data=True, deterministic=True, fp16=False):
         super().__init__(plans_file, fold, output_folder, dataset_directory, batch_dice, stage, unpack_data, deterministic, fp16)
         dataset_properties = load_pickle(join(self.dataset_directory, 'dataset_properties.pkl'))
-        #self.dice_weight=dataset_properties["intensityproperties"][0]['Statistics_of_the_number_of_voxels_in_each_organ']
+        self.voxels_in_each_organ=dataset_properties["intensityproperties"][0]['Statistics_of_the_number_of_voxels_in_each_organ']
         self.dice_weight = np.array([1,1,0.971709592,0.987527885,0.851247212,0.976373961,0.955181505,0.868282296,0.860373149,0.946663963,0.844453458,0.943013588,0.811397282,0.973838978])
-        organ_vol = np.array(self.dice_weight)[1:]
+        organ_vol = np.array(self.voxels_in_each_organ)[1:]
         self.dataset_need_focal_class_weight = (organ_vol.sum()/organ_vol).tolist()   
         v = np.array(self.dice_weight)   
-        self.focal_alpha = (v.sum()/v).tolist()
-        #self.focal_alpha = self.dice_weight
+        self.focal_alpha = (1/v).tolist()
         self.oversample_foreground_percent = 0.33
-        #self.loss = DC_and_CE_loss_with_weight({'batch_dice': self.batch_dice, 'smooth': 1e-5, 'do_bg': False,'dice_weight':self.dice_weight}, {'alpha':self.focal_alpha})
-        self.loss = DC_and_CE_loss({'batch_dice': self.batch_dice, 'smooth': 1e-5, 'do_bg': False,'dice_weight':self.dice_weight}, {})
-        
-        self.lr_scheduler_eps = 1e-4
-        self.lr_scheduler_patience = 5
-        self.initial_lr = 3e-3
-        self.lr_scheduler_factor=0.2
+        self.loss = DC_and_CE_loss_with_weight({'batch_dice': self.batch_dice, 'smooth': 1e-5, 'do_bg': False,'dice_weight':self.dice_weight}, {'alpha':self.focal_alpha})
+        #self.loss = DC_and_CE_loss({'batch_dice': self.batch_dice, 'smooth': 1e-5, 'do_bg': False,'dice_weight':self.dice_weight}, {})
 
     def process_plans(self, plans):
         super().process_plans(plans)
@@ -135,12 +129,3 @@ class nnUNetTrainer_HDC(nnUNetTrainer):
                                   timestamp.second))
 
         return dl_tr, dl_val
-
-    def initialize_optimizer_and_scheduler(self):
-        assert self.network is not None, "self.initialize_network must be called first"
-        self.optimizer = torch.optim.Adam(self.network.parameters(), self.initial_lr, weight_decay=self.weight_decay,
-                                          amsgrad=True)
-        self.lr_scheduler = lr_scheduler.ReduceLROnPlateau(self.optimizer, mode='min', factor=self.lr_scheduler_factor,
-                                                           patience=self.lr_scheduler_patience,
-                                                           verbose=True, threshold=self.lr_scheduler_eps,
-                                                           threshold_mode="abs")

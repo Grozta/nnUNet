@@ -488,9 +488,11 @@ class DataLoader3D_with_selected_wieght(DataLoader3D):
                  oversample_foreground_percent=oversample_foreground_percent, memmap_mode=memmap_mode, pad_mode=pad_mode, pad_kwargs_data=pad_kwargs_data,
                  pad_sides=pad_sides)
         class_wight_np = np.array(dataset_need_focal_class_weight)
+        class_weight_mask= np.array([1,1,1,10,1,1,1,1,1,2,1,8,1])
+        class_wight_np = class_weight_mask * class_wight_np
         self.class_weight = class_wight_np/class_wight_np.sum()
-        self.class_weight_mask= np.array([1,1,1,10,1,1,1,1,1,1,1,10,1])
-        self.class_weight = self.class_weight_mask * self.class_weight
+        np.random.seed(0)
+
         self.dataset_debug_log = None  
         # self.dataset_debug_file = join(network_training_output_dir,'dataset_debug.json')
         # if  isfile(self.dataset_debug_file):
@@ -509,7 +511,7 @@ class DataLoader3D_with_selected_wieght(DataLoader3D):
     def generate_train_batch(self):
         
         selected_keys = np.random.choice(self.list_of_keys, self.batch_size, True, None)
-        self.write_log_line(str(selected_keys.tolist()))
+        
         # debug_info=OrderedDict()
         # debug_info['selected_keys'] = selected_keys.tolist()
         
@@ -610,13 +612,14 @@ class DataLoader3D_with_selected_wieght(DataLoader3D):
                         index_and_weight[class_index] = self.class_weight[class_index-1]
                         
                     index_and_weight = dict(sorted(index_and_weight.items()))
-                    choices = torch.tensor(list(index_and_weight.keys()))
                     weiht_sum = sum(list(index_and_weight.values()))
                     index_and_weight = {key: value / weiht_sum for key, value in index_and_weight.items()}
-                    weights = torch.tensor(list(index_and_weight.values()))
                     
-                    random_choice = torch.multinomial(weights, 1)
-                    selected_class = choices[random_choice.item()]
+                    weights = np.array(list(index_and_weight.values()))
+                    choices = np.array(list(index_and_weight.keys()))
+                    
+                    selected_class = np.random.choice(choices, p=weights.ravel())
+                    self.write_log_line(str(selected_keys.tolist()) + f'[{j}]' + f'[{selected_class}]')
                     
                     voxels_of_that_class = properties['class_locations'][int(selected_class.item())]
 

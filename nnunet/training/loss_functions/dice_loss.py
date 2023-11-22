@@ -385,7 +385,7 @@ class DC_and_CE_loss_with_weight(nn.Module):
         self.ignore_label = ignore_label
 
         if not square_dice:
-            self.dc = SoftDiceLossWithWeight(apply_nonlin=softmax_helper, **soft_dice_kwargs)
+            self.dc = SoftDiceLossWithWeight_normal(apply_nonlin=softmax_helper, **soft_dice_kwargs)
         else:
             self.dc = SoftDiceLossSquared(apply_nonlin=softmax_helper, **soft_dice_kwargs)
 
