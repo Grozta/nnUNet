@@ -715,7 +715,8 @@ class nnUNetTrainer(NetworkTrainer):
         self.all_val_eval_metrics.append(np.mean(global_dc_per_class))
 
         self.print_to_log_file("Average global foreground Dice:", [np.round(i, 4) for i in global_dc_per_class])
-        self.print_to_log_file(f"Average Dice:{sum(global_dc_per_class)/len(global_dc_per_class)}")
+        self.online_val_mean_list.append(sum(global_dc_per_class)/len(global_dc_per_class))
+        self.print_to_log_file(f"Average Dice:{(self.online_val_mean_list)[-1]}")
         self.print_to_log_file("(interpret this as an estimate for the Dice of the different classes. This is not "
                                "exact.)")
 

@@ -573,9 +573,13 @@ class NetworkTrainer(object):
 
             if self.val_eval_criterion_MA > self.best_val_eval_criterion_MA:
                 self.best_val_eval_criterion_MA = self.val_eval_criterion_MA
-                #self.print_to_log_file("saving best epoch checkpoint...")
+                self.print_to_log_file("saving best epoch checkpoint...")
                 if self.save_best_checkpoint: self.save_checkpoint(join(self.output_folder, "model_best.model"))
 
+            if (self.online_val_mean_list)[-1] >= max(self.online_val_mean_list):
+                self.print_to_log_file("saving best model_best_online epoch checkpoint...")
+                if self.save_best_checkpoint: self.save_checkpoint(join(self.output_folder, "model_best_online.model"))
+            
             # Now see if the moving average of the train loss has improved. If yes then reset patience, else
             # increase patience
             if self.train_loss_MA + self.train_loss_MA_eps < self.best_MA_tr_loss_for_patience:
@@ -640,6 +644,11 @@ class NetworkTrainer(object):
 
         if self.fp16:
             with autocast():
+                        
+                #from thop import profile
+                #inputs = torch.randn(4, 64,160,160)
+                # flops, params = profile(self.network, (data,))
+                # print('flops: ', flops, 'params: ', params)
                 output = self.network(data)
                 del data
                 l,ce,dc = self.loss(output, target)

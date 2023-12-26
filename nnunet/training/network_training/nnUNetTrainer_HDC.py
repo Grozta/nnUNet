@@ -19,9 +19,11 @@ from torch.optim import lr_scheduler
 class nnUNetTrainer_HDC(nnUNetTrainer):
     def __init__(self, plans_file, fold, output_folder=None, dataset_directory=None, batch_dice=True, stage=None, unpack_data=True, deterministic=True, fp16=False):
         super().__init__(plans_file, fold, output_folder, dataset_directory, batch_dice, stage, unpack_data, deterministic, fp16)
+        self.online_val_mean_list = []
+        self.lr_threshold = 1e-7
         dataset_properties = load_pickle(join(self.dataset_directory, 'dataset_properties.pkl'))
         self.voxels_in_each_organ=dataset_properties["intensityproperties"][0]['Statistics_of_the_number_of_voxels_in_each_organ']
-        self.dice_weight = np.array([1,1,0.971709592,0.987527885,0.851247212,0.976373961,0.955181505,0.868282296,0.860373149,0.946663963,0.844453458,0.943013588,0.811397282,0.973838978])
+        self.dice_weight = np.array([1,1,0.971709592,0.987527885,0.851247212,0.976373961,0.955181505,0.868282296,0.860373149,0.946663963,0.864453458,0.943013588,0.811397282,0.973838978])
         organ_vol = np.array(self.voxels_in_each_organ)[1:]
         self.dataset_need_focal_class_weight = (organ_vol.sum()/organ_vol).tolist()   
         v = np.array(self.dice_weight)   
@@ -37,7 +39,7 @@ class nnUNetTrainer_HDC(nnUNetTrainer):
 
     def initialize_network(self):
     
-        self.max_num_epochs = 600
+        self.max_num_epochs = 650
         self.num_batches_per_epoch = 320   
         self.use_progress_bar = True
         self.feature_channels = [80,96,128,256]
